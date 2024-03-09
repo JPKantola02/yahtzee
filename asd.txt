@@ -1,0 +1,123 @@
+import React, { useState } from 'react';
+import { View, Text, Button, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialIcons } from '@expo/vector-icons';
+
+const getDiceImage = (value) => {
+    switch (value) {
+        case 1:
+            return require('../assets/dice1.png');
+        case 2:
+            return require('../assets/dice2.png');
+        case 3:
+            return require('../assets/dice3.png');
+        case 4:
+            return require('../assets/dice4.png');
+        case 5:
+            return require('../assets/dice5.png');
+        case 6:
+            return require('../assets/dice6.png');
+        default:
+            return null;
+    }
+};
+
+const GameboardScreen = ({ route, navigation }) => {
+    const { playerName } = route.params;
+    const [dice, setDice] = useState(Array.from({ length: 5 }, () => 6)); // Initialize dices to show pictures of dice6
+    const [rollsLeft, setRollsLeft] = useState(3);
+    const [selectedDice, setSelectedDice] = useState(Array.from({ length: 5 }, () => false)); // Initial state of selected dice, all set to false
+    const [totalScore, setTotalScore] = useState(0);
+
+    const rollDice = () => {
+        if (rollsLeft > 0) {
+            const newDice = dice.map((value, index) => (selectedDice[index] ? value : Math.floor(Math.random() * 6) + 1)); // Roll only unselected dice
+            setDice(newDice);
+            setRollsLeft(rollsLeft - 1);
+        }
+    };
+
+    const toggleSelectDice = (index) => {
+        const newSelectedDice = [...selectedDice];
+        newSelectedDice[index] = !newSelectedDice[index]; // Toggle selected state
+        setSelectedDice(newSelectedDice);
+    };
+
+    const endTurn = async () => {
+        // Calculate points based on selected dice
+        const turnScore = dice.reduce((acc, curr, index) => (selectedDice[index] ? acc + curr : acc), 0);
+        setTotalScore(totalScore + turnScore);
+
+        // Reset rolls left, selected dice, and dice
+        setRollsLeft(3);
+        setSelectedDice(Array.from({ length: 5 }, () => false));
+        setDice(Array.from({ length: 5 }, () => 1));
+    };
+
+    return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Text>Gameboard</Text>
+            <Image source={require('../assets/yahtzeegameicon.png')} style={{ width: 200, height: 200, marginBottom: 20 }} />
+            {/* Display actual pictures of the dice */}
+            <View style={{ flexDirection: 'row', marginVertical: 10 }}>
+                {dice.map((value, index) => (
+                    <TouchableOpacity key={index} onPress={() => toggleSelectDice(index)}>
+                        <Image
+                            source={getDiceImage(value)}
+                            style={{
+                                width: 50,
+                                height: 50,
+                                marginHorizontal: 5,
+                                opacity: selectedDice[index] ? 0.5 : 1, // Dim the selected dice
+                            }}
+                        />
+                    </TouchableOpacity>
+                ))}
+            </View>
+            <Text>Throws left: {rollsLeft}</Text>
+            <TouchableOpacity style={styles.buttonContainer} onPress={rollDice} disabled={rollsLeft === 0}>
+                <Text style={styles.buttonText}>Throw Dice</Text>
+            </TouchableOpacity>
+            <Button title="End Turn" onPress={endTurn} disabled={!selectedDice.some((selected) => selected)} />
+            <Text>Total Score: {totalScore}</Text>
+            <Text>Points away from bonus: {totalScore < 63 ? 63 - totalScore : 0}</Text>
+            {/* Bottom Tab Navigator */}
+            <View style={styles.bottomTabContainer}>
+                <TouchableOpacity onPress={() => navigation.navigate('Home')}>
+                    <MaterialIcons name="home" size={24} color="black" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.navigate('Scoreboard')}>
+                    <MaterialIcons name="leaderboard" size={24} color="black" />
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+};
+
+const styles = StyleSheet.create({
+    buttonContainer: {
+        backgroundColor: 'lightblue',
+        padding: 10,
+        borderRadius: 10,
+        marginTop: 10,
+    },
+    buttonText: {
+        textAlign: 'center',
+        color: 'black',
+        fontWeight: 'bold',
+        fontSize: 18,
+    },
+    bottomTabContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        position: 'absolute',
+        bottom: 0,
+        width: '100%',
+        paddingVertical: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'gray',
+        backgroundColor: 'lightgray',
+    },
+});
+
+export default GameboardScreen;
