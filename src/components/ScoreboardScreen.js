@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ScoreboardScreen = () => {
+    const { finalScore } = route.params;
     const [topScores, setTopScores] = useState([]);
 
     useEffect(() => {

@@ -3,14 +3,15 @@ import { View, Text, Button, TouchableOpacity, Image, ScrollView, StyleSheet } f
 import { MaterialIcons } from '@expo/vector-icons';
 import { Col, Row, Grid } from 'react-native-easy-grid';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Constants
 const NBR_OF_DICES = 5;
 const NBR_OF_THROWS = 3;
 const MIN_SPOT = 1;
 const MAX_SPOT = 6;
-const BONUS_POINTS_LIMIT = 63;
-const BONUS_POINTS = 35;
+const BONUS_POINTS_LIMIT = 40;
+const BONUS_POINTS = 50;
 
 const GameboardScreen = ({ navigation }) => {
     const [rollsLeft, setRollsLeft] = useState(3);
@@ -20,12 +21,26 @@ const GameboardScreen = ({ navigation }) => {
     const [showDice, setShowDice] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [lockedCategories, setLockedCategories] = useState([]);
+    const [gameEnded, setGameEnded] = useState(false);
+    const [turnEnded, setTurnEnded] = useState(false);
+    const [bonusPoints, setBonusPoints] = useState(0);
+    const [pointsAwayFromBonus, setPointsAwayFromBonus] = useState(40);
 
     useEffect(() => {
         if (selectedCategories.length === 6) {
-            endTurn();
+            endGame();
         }
     }, [selectedCategories]);
+
+    useEffect(() => {
+        if (totalScore >= BONUS_POINTS_LIMIT && bonusPoints === 0) {
+            setBonusPoints(BONUS_POINTS);
+        }
+    }, [totalScore, bonusPoints]);
+
+    useEffect(() => {
+        setPointsAwayFromBonus(Math.max(BONUS_POINTS_LIMIT - totalScore, 0));
+    }, [totalScore]);
 
     const calculateCountScore = (diceValues, number) => {
         return diceValues.reduce((score, value) => {
@@ -33,8 +48,10 @@ const GameboardScreen = ({ navigation }) => {
                 return score + number;
             }
             return score;
-        }, 0);
-    };
+        }, 
+    0);
+};
+
 
 
     const calculateOnesScore = (diceValues) => calculateCountScore(diceValues, 1);
@@ -59,12 +76,32 @@ const GameboardScreen = ({ navigation }) => {
     };
 
     const handleCategorySelect = (category) => {
-        if (!selectedCategories.includes(category) && !lockedCategories.includes(category)) {
-            const categoryScore = calculateCategoryScore(category, diceValues);
-            setTotalScore(totalScore + categoryScore);
-            setSelectedCategories([...selectedCategories, category]);
+    if (turnEnded || gameEnded) {
+        console.log('Turn has ended or game has ended. Categories cannot be selected.');
+        return;
+    }
+
+    if (selectedCategories.includes(category)) {
+        setSelectedCategories(selectedCategories.filter(item => item !== category)); // Deselect the category if it's already selected
+    } else {
+        setSelectedCategories([...selectedCategories, category]); // Select the category
+        const categoryScore = calculateCategoryScore(category, diceValues);
+        setTotalScore(totalScore + categoryScore);
+        setLockedCategories([...lockedCategories, category]); // Update lockedCategories to indicate the category has been used
+    }
+};
+    
+
+    /* const calculateBonusPoints = () => {
+        if (totalScore >= 40) {
+            setBonusPoints(50);
+        } else {
+            setBonusPoints(40 - totalScore);
         }
-    };
+    };*/
+    
+    // Update bonus points whenever total score changes
+    
 
     const calculateTotalScore = (categories) => {
         let total = 0;
@@ -74,6 +111,8 @@ const GameboardScreen = ({ navigation }) => {
         setTotalScore(total);
     };
 
+    
+
     const rollDice = () => {
         if (rollsLeft > 0) {
             const newDiceValues = diceValues.map((value, index) => {
@@ -82,29 +121,62 @@ const GameboardScreen = ({ navigation }) => {
             setDiceValues(newDiceValues);
             setShowDice(true);
             setRollsLeft(rollsLeft - 1);
+        }   else {
+            setTurnEnded(true); // All throws have been used, end the turn
         }
     };
 
     const getDiceImage = (value) => {
-        return value === 1 ? require('../assets/dice1.png') :
-            value === 2 ? require('../assets/dice2.png') :
-            value === 3 ? require('../assets/dice3.png') :
-            value === 4 ? require('../assets/dice4.png') :
-            value === 5 ? require('../assets/dice5.png') :
-            value === 6 ? require('../assets/dice6.png') : null;
+        return value === 1 ? 
+            require('../assets/dice1.png') :
+            value === 2 ? 
+            require('../assets/dice2.png') :
+            value === 3 ? 
+            require('../assets/dice3.png') :
+            value === 4 ? 
+            require('../assets/dice4.png') :
+            value === 5 ? 
+            require('../assets/dice5.png') :
+            value === 6 ? 
+            require('../assets/dice6.png') : 
+            null;
     };
 
     const toggleSelectDice = (index) => {
-        const newSelectedDice = [...selectedDice];
-        newSelectedDice[index] = !newSelectedDice[index];
-        setSelectedDice(newSelectedDice);
+        if (!gameEnded) {
+            const newSelectedDice = [...selectedDice];
+            newSelectedDice[index] = !newSelectedDice[index];
+            setSelectedDice(newSelectedDice);
+        }
+            
     };
 
     const endTurn = () => {
+        // Add bonus points to total score
+        const newTotalScore = totalScore + bonusPoints;
+        setTotalScore(newTotalScore);
+    
         setRollsLeft(3);
         setSelectedDice(Array.from({ length: 5 }, () => false));
         setSelectedCategories([]);
-        setLockedCategories([...lockedCategories, ...selectedCategories]);
+        setTurnEnded(false);
+    };
+
+    const endGame = async () => {
+        // Add bonus points to total score
+        const newTotalScore = totalScore + bonusPoints;
+        setTotalScore(newTotalScore);
+
+        setGameEnded(true);
+        // Save final score
+        try {
+            await AsyncStorage.setItem('finalScore', newTotalScore.toString());
+
+            navigation.navigate('Scoreboard');
+        } catch (error) {
+            console.error('Error saving final score:', error);
+        }
+        // Navigate to scoreboard or any other screen
     };
 
     return (
@@ -128,23 +200,24 @@ const GameboardScreen = ({ navigation }) => {
                     </TouchableOpacity>
                     <Button title="End Turn" onPress={endTurn} disabled={!selectedDice.some((selected) => selected)} />
                     <Text>Total Score: {totalScore}</Text>
-                    <Text>Points away from bonus: {totalScore < 63 ? 63 - totalScore : 0}</Text>
+                    <Text>Points away from bonus: {pointsAwayFromBonus}</Text>
                 </View>
                 <View style={{ flex: 2, paddingHorizontal: 20 }}>
                     <Grid>
                         <Row>
                             <Col>
                                 <View style={styles.pointButtonsContainer}>
-                                    {Object.keys(scoringCategories).map((categoryName, index) => (
-                                        <View key={categoryName} style={styles.pointButtonContainer}>
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.pointButton,
-                                                    { backgroundColor: selectedCategories.includes(categoryName) ? '#66ccff' : 'white' },
-                                                ]}
+                                {Object.keys(scoringCategories).map((categoryName, index) => (
+                                    <View key={categoryName} style={styles.pointButtonContainer}>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.pointButton,
+                                                    { backgroundColor: lockedCategories.includes(categoryName) ? 'yellow' : 'white' },
+                                                 ]}
                                                 onPress={() => handleCategorySelect(categoryName)}
+                                                disabled={lockedCategories.includes(categoryName)}
                                             >
-                                                <Text style={[styles.circleText, selectedCategories.includes(categoryName) && styles.selectedCircleText]}>{categoryName}</Text>
+                                                <Text style={[styles.circleText, lockedCategories.includes(categoryName) && styles.lockedCircleText]}>{categoryName}</Text>
                                                 <Text style={styles.countText}>{calculateCategoryScore(categoryName, diceValues)}</Text>
                                             </TouchableOpacity>
                                         </View>
